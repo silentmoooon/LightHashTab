@@ -29,6 +29,9 @@ public static class PropertySheetPage
         public CancellationTokenSource? Cts { get; set; }
         public GCHandle GcHandle { get; set; }
 
+        public nint PTemplate { get; set; }
+        public nint PTitle { get; set; }
+
         public nint HwndDlg { get; set; }
         public nint HwndFileInfo { get; set; }
         public nint HwndListView { get; set; }
@@ -57,11 +60,17 @@ public static class PropertySheetPage
                         hashList,
                         onProgress: percent =>
                         {
-                            Win32.PostMessageW(hwnd, Win32.WM_APP_PROGRESS, (nuint)percent, 0);
+                            if (hwnd != 0)
+                            {
+                                Win32.PostMessageW(hwnd, Win32.WM_APP_PROGRESS, (nuint)percent, 0);
+                            }
                         },
                         token).ConfigureAwait(false);
 
-                    Win32.PostMessageW(hwnd, Win32.WM_APP_HASH_FINISHED, 0, 0);
+                    if (hwnd != 0)
+                    {
+                        Win32.PostMessageW(hwnd, Win32.WM_APP_HASH_FINISHED, 0, 0);
+                    }
                 }
                 catch (OperationCanceledException)
                 {
@@ -73,7 +82,10 @@ public static class PropertySheetPage
                     {
                         h.Status = $"Error: {ex.Message}";
                     }
-                    Win32.PostMessageW(hwnd, Win32.WM_APP_HASH_FINISHED, 0, 0);
+                    if (hwnd != 0)
+                    {
+                        Win32.PostMessageW(hwnd, Win32.WM_APP_HASH_FINISHED, 0, 0);
+                    }
                 }
             }, token);
         }
@@ -88,10 +100,14 @@ public static class PropertySheetPage
 
         string firstFile = filePaths[0];
         long fileSize = 0;
-        if (File.Exists(firstFile))
+        try
         {
-            fileSize = new FileInfo(firstFile).Length;
+            if (File.Exists(firstFile))
+            {
+                fileSize = new FileInfo(firstFile).Length;
+            }
         }
+        catch { }
 
         var summary = new FileHashSummary
         {
@@ -119,31 +135,69 @@ public static class PropertySheetPage
         var gcHandle = GCHandle.Alloc(state);
         state.GcHandle = gcHandle;
 
-        // Create in-memory dialog template: DLGTEMPLATE + 3 ushort zeros (menu, class, title)
+        // Allocate in-memory DLGTEMPLATE in unmanaged memory
         int templateSize = sizeof(DLGTEMPLATE) + 3 * sizeof(ushort);
         byte* pTemplate = (byte*)NativeMemory.AllocZeroed((nuint)templateSize);
         DLGTEMPLATE* dlg = (DLGTEMPLATE*)pTemplate;
         dlg->style = Win32.WS_CHILD | Win32.WS_VISIBLE | Win32.DS_CONTROL;
+        dlg->dwExtendedStyle = 0x00010000; // WS_EX_CONTROLPARENT
+        dlg->cdit = 0;
         dlg->cx = 240;
         dlg->cy = 200;
+        state.PTemplate = (nint)pTemplate;
 
-        string tabTitle = "File Hashes";
-        fixed (char* pTitle = tabTitle)
+        // Allocate Title in unmanaged memory so it NEVER gets relocated or collected by GC
+        nint pTitle = Marshal.StringToHGlobalUni("File Hashes");
+        state.PTitle = pTitle;
+
+        PROPSHEETPAGEW psp = new()
         {
-            PROPSHEETPAGEW psp = new()
-            {
-                dwSize = (uint)sizeof(PROPSHEETPAGEW),
-                dwFlags = Win32.PSP_DLGINDIRECT | Win32.PSP_USETITLE,
-                hInstance = 0,
-                pszTemplate = (char*)pTemplate,
-                pszTitle = pTitle,
-                pfnDlgProc = &DialogProc,
-                lParam = GCHandle.ToIntPtr(gcHandle)
-            };
+            dwSize = (uint)sizeof(PROPSHEETPAGEW),
+            dwFlags = Win32.PSP_DLGINDIRECT | Win32.PSP_USETITLE | Win32.PSP_USECALLBACK,
+            hInstance = 0,
+            pszTemplate = (char*)pTemplate,
+            pszTitle = (char*)pTitle,
+            pfnDlgProc = &DialogProc,
+            lParam = GCHandle.ToIntPtr(gcHandle),
+            pfnCallback = &PropSheetPageCallback
+        };
 
-            nint hPage = Win32.CreatePropertySheetPageW(&psp);
-            return hPage;
+        nint hPage = Win32.CreatePropertySheetPageW(&psp);
+        if (hPage == 0)
+        {
+            NativeMemory.Free(pTemplate);
+            Marshal.FreeHGlobal(pTitle);
+            gcHandle.Free();
         }
+        return hPage;
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvStdcall)])]
+    public static unsafe uint PropSheetPageCallback(nint hwnd, uint uMsg, PROPSHEETPAGEW* ppsp)
+    {
+        if (uMsg == Win32.PSPCB_RELEASE)
+        {
+            if (ppsp != null && ppsp->lParam != 0)
+            {
+                var gcHandle = GCHandle.FromIntPtr(ppsp->lParam);
+                if (gcHandle.IsAllocated && gcHandle.Target is PageState state)
+                {
+                    state.Cts?.Cancel();
+                    if (state.PTemplate != 0)
+                    {
+                        NativeMemory.Free((void*)state.PTemplate);
+                        state.PTemplate = 0;
+                    }
+                    if (state.PTitle != 0)
+                    {
+                        Marshal.FreeHGlobal(state.PTitle);
+                        state.PTitle = 0;
+                    }
+                    gcHandle.Free();
+                }
+            }
+        }
+        return 1;
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvStdcall)])]
@@ -157,14 +211,41 @@ public static class PropertySheetPage
                 if (psp == null || psp->lParam == 0) return 1;
 
                 var gcHandle = GCHandle.FromIntPtr(psp->lParam);
-                if (gcHandle.Target is not PageState state) return 1;
+                if (!gcHandle.IsAllocated || gcHandle.Target is not PageState state) return 1;
 
                 state.HwndDlg = hwndDlg;
                 Win32.SetWindowLongPtrW(hwndDlg, Win32.DWLP_USER, GCHandle.ToIntPtr(gcHandle));
 
+                // Initialize common controls
+                INITCOMMONCONTROLSEX icc = new()
+                {
+                    dwSize = (uint)sizeof(INITCOMMONCONTROLSEX),
+                    dwICC = Win32.ICC_LISTVIEW_CLASSES | Win32.ICC_PROGRESS_CLASS | Win32.ICC_STANDARD_CLASSES
+                };
+                Win32.InitCommonControlsEx(&icc);
+
                 InitializeDialogControls(state);
                 state.StartCalculation();
                 return 1;
+            }
+
+            case Win32.WM_NOTIFY:
+            {
+                NMHDR* pnm = (NMHDR*)lParam;
+                if (pnm != null)
+                {
+                    if (pnm->code == Win32.PSN_SETACTIVE)
+                    {
+                        Win32.SetWindowLongPtrW(hwndDlg, Win32.DWLP_MSGRESULT, 0);
+                        return 1;
+                    }
+                    else if (pnm->code == Win32.PSN_KILLACTIVE || pnm->code == Win32.PSN_APPLY)
+                    {
+                        Win32.SetWindowLongPtrW(hwndDlg, Win32.DWLP_MSGRESULT, 0);
+                        return 1;
+                    }
+                }
+                return 0;
             }
 
             case Win32.WM_SIZE:
@@ -204,7 +285,7 @@ public static class PropertySheetPage
             case Win32.WM_APP_PROGRESS:
             {
                 var state = GetState(hwndDlg);
-                if (state != null)
+                if (state != null && state.HwndProgress != 0)
                 {
                     int percent = (int)wParam;
                     Win32.SendMessageW(state.HwndProgress, Win32.PBM_SETPOS, (nuint)percent, 0);
@@ -218,7 +299,10 @@ public static class PropertySheetPage
                 if (state != null)
                 {
                     UpdateListViewItems(state);
-                    Win32.SendMessageW(state.HwndProgress, Win32.PBM_SETPOS, 100, 0);
+                    if (state.HwndProgress != 0)
+                    {
+                        Win32.SendMessageW(state.HwndProgress, Win32.PBM_SETPOS, 100, 0);
+                    }
                     CheckHashMatch(state);
                 }
                 return 0;
@@ -230,10 +314,8 @@ public static class PropertySheetPage
                 if (state != null)
                 {
                     state.Cts?.Cancel();
-                    if (state.GcHandle.IsAllocated)
-                    {
-                        state.GcHandle.Free();
-                    }
+                    state.HwndDlg = 0;
+                    Win32.SetWindowLongPtrW(hwndDlg, Win32.DWLP_USER, 0);
                 }
                 return 0;
             }
@@ -244,6 +326,7 @@ public static class PropertySheetPage
 
     private static PageState? GetState(nint hwndDlg)
     {
+        if (hwndDlg == 0) return null;
         nint ptr = Win32.GetWindowLongPtrW(hwndDlg, Win32.DWLP_USER);
         if (ptr == 0) return null;
         var gcHandle = GCHandle.FromIntPtr(ptr);
@@ -272,21 +355,24 @@ public static class PropertySheetPage
             8, 30, 320, 140,
             hwnd, (nint)IDC_LIST_HASHES, 0, null);
 
-        Win32.SendMessageW(state.HwndListView, Win32.LVM_SETEXTENDEDLISTVIEWSTYLE, 0,
-            (nint)(Win32.LVS_EX_FULLROWSELECT | Win32.LVS_EX_GRIDLINES | Win32.LVS_EX_DOUBLEBUFFER));
-
-        ThemeHelper.ApplyTheme(state.HwndListView);
-
-        // Add Columns
-        AddColumn(state.HwndListView, 0, "Algorithm", 85);
-        AddColumn(state.HwndListView, 1, "Hash Value", 260);
-        AddColumn(state.HwndListView, 2, "Status", 75);
-
-        // Populate initial rows
-        for (int i = 0; i < state.Summary.Hashes.Count; i++)
+        if (state.HwndListView != 0)
         {
-            var h = state.Summary.Hashes[i];
-            InsertRow(state.HwndListView, i, h.Name, "Computing...", h.Status);
+            Win32.SendMessageW(state.HwndListView, Win32.LVM_SETEXTENDEDLISTVIEWSTYLE, 0,
+                (nint)(Win32.LVS_EX_FULLROWSELECT | Win32.LVS_EX_GRIDLINES | Win32.LVS_EX_DOUBLEBUFFER));
+
+            ThemeHelper.ApplyTheme(state.HwndListView);
+
+            // Add Columns
+            AddColumn(state.HwndListView, 0, "Algorithm", 85);
+            AddColumn(state.HwndListView, 1, "Hash Value", 260);
+            AddColumn(state.HwndListView, 2, "Status", 75);
+
+            // Populate initial rows
+            for (int i = 0; i < state.Summary.Hashes.Count; i++)
+            {
+                var h = state.Summary.Hashes[i];
+                InsertRow(state.HwndListView, i, h.Name, "Computing...", h.Status);
+            }
         }
 
         // Progress bar
@@ -295,7 +381,11 @@ public static class PropertySheetPage
             Win32.WS_CHILD | Win32.WS_VISIBLE | Win32.PBS_SMOOTH,
             8, 175, 320, 12,
             hwnd, (nint)IDC_PROGRESS, 0, null);
-        Win32.SendMessageW(state.HwndProgress, Win32.PBM_SETRANGE32, 0, 100);
+
+        if (state.HwndProgress != 0)
+        {
+            Win32.SendMessageW(state.HwndProgress, Win32.PBM_SETRANGE32, 0, 100);
+        }
 
         // Compare Row: Label + Edit Box
         state.HwndLabelCompare = Win32.CreateWindowExW(
@@ -362,33 +452,58 @@ public static class PropertySheetPage
         int contentW = w - pad * 2;
 
         // Top info: y = 8, h = 18
-        Win32.SetWindowPos(state.HwndFileInfo, 0, pad, pad, contentW, 18, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
+        if (state.HwndFileInfo != 0)
+        {
+            Win32.SetWindowPos(state.HwndFileInfo, 0, pad, pad, contentW, 18, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
+        }
 
         // Bottom section height is approx 88px
         int listY = 30;
         int listH = Math.Max(50, h - listY - 88);
-        Win32.SetWindowPos(state.HwndListView, 0, pad, listY, contentW, listH, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
+        if (state.HwndListView != 0)
+        {
+            Win32.SetWindowPos(state.HwndListView, 0, pad, listY, contentW, listH, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
+        }
 
         int progressY = listY + listH + 6;
-        Win32.SetWindowPos(state.HwndProgress, 0, pad, progressY, contentW, 10, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
+        if (state.HwndProgress != 0)
+        {
+            Win32.SetWindowPos(state.HwndProgress, 0, pad, progressY, contentW, 10, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
+        }
 
         int compareY = progressY + 16;
         int compareLabelW = 60;
-        Win32.SetWindowPos(state.HwndLabelCompare, 0, pad, compareY + 2, compareLabelW, 18, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
-        Win32.SetWindowPos(state.HwndEditCompare, 0, pad + compareLabelW + 4, compareY, contentW - compareLabelW - 4, 22, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
+        if (state.HwndLabelCompare != 0)
+        {
+            Win32.SetWindowPos(state.HwndLabelCompare, 0, pad, compareY + 2, compareLabelW, 18, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
+        }
+        if (state.HwndEditCompare != 0)
+        {
+            Win32.SetWindowPos(state.HwndEditCompare, 0, pad + compareLabelW + 4, compareY, Math.Max(10, contentW - compareLabelW - 4), 22, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
+        }
 
         int actionsY = compareY + 26;
         int btnW1 = 100;
         int btnW2 = 80;
         int matchLabelW = Math.Max(60, contentW - btnW1 - btnW2 - 12);
 
-        Win32.SetWindowPos(state.HwndLabelMatch, 0, pad, actionsY + 2, matchLabelW, 20, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
-        Win32.SetWindowPos(state.HwndBtnCopySel, 0, pad + matchLabelW + 4, actionsY, btnW1, 23, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
-        Win32.SetWindowPos(state.HwndBtnCopyAll, 0, pad + matchLabelW + 4 + btnW1 + 4, actionsY, btnW2, 23, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
+        if (state.HwndLabelMatch != 0)
+        {
+            Win32.SetWindowPos(state.HwndLabelMatch, 0, pad, actionsY + 2, matchLabelW, 20, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
+        }
+        if (state.HwndBtnCopySel != 0)
+        {
+            Win32.SetWindowPos(state.HwndBtnCopySel, 0, pad + matchLabelW + 4, actionsY, btnW1, 23, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
+        }
+        if (state.HwndBtnCopyAll != 0)
+        {
+            Win32.SetWindowPos(state.HwndBtnCopyAll, 0, pad + matchLabelW + 4 + btnW1 + 4, actionsY, btnW2, 23, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
+        }
     }
 
     private static unsafe void AddColumn(nint hwndList, int index, string text, int width)
     {
+        if (hwndList == 0) return;
         fixed (char* pText = text)
         {
             LVCOLUMNW col = new()
@@ -404,6 +519,7 @@ public static class PropertySheetPage
 
     private static unsafe void InsertRow(nint hwndList, int row, string algorithm, string hash, string status)
     {
+        if (hwndList == 0) return;
         fixed (char* pAlgo = algorithm)
         {
             LVITEMW item = new()
@@ -422,6 +538,7 @@ public static class PropertySheetPage
 
     private static unsafe void SetRowSubItem(nint hwndList, int row, int subItem, string text)
     {
+        if (hwndList == 0) return;
         fixed (char* pText = text)
         {
             LVITEMW item = new()
@@ -437,6 +554,7 @@ public static class PropertySheetPage
 
     private static void UpdateListViewItems(PageState state)
     {
+        if (state.HwndListView == 0) return;
         for (int i = 0; i < state.Summary.Hashes.Count; i++)
         {
             var h = state.Summary.Hashes[i];
@@ -447,6 +565,8 @@ public static class PropertySheetPage
 
     private static unsafe void CheckHashMatch(PageState state)
     {
+        if (state.HwndEditCompare == 0 || state.HwndLabelMatch == 0) return;
+
         int length = Win32.GetWindowTextLengthW(state.HwndEditCompare);
         if (length == 0)
         {
@@ -455,8 +575,8 @@ public static class PropertySheetPage
         }
 
         char* pBuf = stackalloc char[length + 2];
-        Win32.GetWindowTextW(state.HwndEditCompare, pBuf, length + 1);
-        string input = new string(pBuf).Trim();
+        int read = Win32.GetWindowTextW(state.HwndEditCompare, pBuf, length + 1);
+        string input = read > 0 ? new string(pBuf, 0, read).Trim() : string.Empty;
 
         if (string.IsNullOrEmpty(input))
         {
@@ -488,6 +608,7 @@ public static class PropertySheetPage
 
     private static void CopySelectedHash(PageState state)
     {
+        if (state.HwndListView == 0) return;
         int selectedIndex = (int)Win32.SendMessageW(state.HwndListView, Win32.LVM_GETNEXTITEM, unchecked((nuint)(-1)), Win32.LVNI_SELECTED);
         if (selectedIndex >= 0 && selectedIndex < state.Summary.Hashes.Count)
         {

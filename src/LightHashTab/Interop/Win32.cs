@@ -55,6 +55,10 @@ public static unsafe class Win32
     public const uint PSP_USEHEADERTITLE = 0x00001000;
     public const uint PSP_USEHEADERSUBTITLE = 0x00002000;
 
+    public const uint PSPCB_ADDREF = 0;
+    public const uint PSPCB_RELEASE = 1;
+    public const uint PSPCB_CREATE = 2;
+
     public const uint PSN_FIRST = unchecked((uint)-200);
     public const uint PSN_SETACTIVE = PSN_FIRST - 0;
     public const uint PSN_KILLACTIVE = PSN_FIRST - 1;
@@ -289,6 +293,7 @@ public unsafe struct PROPSHEETPAGEW
     public char* pszHeaderTitle;
     public char* pszHeaderSubTitle;
     public nint hActCtx;
+    public nint hbmHeader;
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 2)]
