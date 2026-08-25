@@ -1,0 +1,40 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*' # 当推送以 v 开头的 tag 时触发 (例如 v1.0.0)
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    permissions:
+      contents: write # 允许 Action 自动上传文件到 Release
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x' # 使用 .NET 10 环境
+
+      - name: Build and Package
+        shell: pwsh
+        run: |
+          # 提取纯版本号 (例如把 v1.0.0 变成 1.0.0)
+          $version = $env:GITHUB_REF_NAME.TrimStart('v')
+          
+          # 调用我们写的打包脚本
+          .\make-release.ps1 -Version $version
+          
+          # 获取生成的 zip 文件路径，传给下一步
+          $zipPath = Get-ChildItem "dist\*.zip" | Select-Object -First 1 -ExpandProperty FullName
+          echo "ZIP_PATH=$zipPath" >> $env:GITHUB_ENV
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ZIP_PATH }}
+          generate_release_notes: true # 自动生成 Release 变动说明
