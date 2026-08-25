@@ -41,6 +41,9 @@ public static unsafe class Win32
     public const uint WM_USER = 0x0400;
     public const uint WM_APP = 0x8000;
 
+    // Edit control messages
+    public const uint EM_SETCUEBANNER = WM_USER + 158; // EM_SETCUEBANNER = 0x1501
+
     // Custom App Messages
     public const uint WM_APP_PROGRESS = WM_APP + 1;
     public const uint WM_APP_HASH_RESULT = WM_APP + 2;

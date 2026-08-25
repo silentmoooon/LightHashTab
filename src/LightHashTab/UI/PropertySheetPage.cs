@@ -16,11 +16,10 @@ public static class PropertySheetPage
     private const int IDC_FILE_INFO    = 2001;
     private const int IDC_LIST_HASHES  = 2002;
     private const int IDC_PROGRESS     = 2003;
-    private const int IDC_LABEL_COMPARE = 2004;
-    private const int IDC_EDIT_COMPARE = 2005;
-    private const int IDC_LABEL_MATCH  = 2006;
-    private const int IDC_BTN_COPY_SEL = 2007;
-    private const int IDC_BTN_COPY_ALL = 2008;
+    private const int IDC_EDIT_COMPARE = 2004;
+    private const int IDC_LABEL_MATCH  = 2005;
+    private const int IDC_BTN_COPY_SEL = 2006;
+    private const int IDC_BTN_COPY_ALL = 2007;
 
     // Column indices
     private const int COL_ALGO   = 0;
@@ -41,7 +40,6 @@ public static class PropertySheetPage
         public nint HwndFileInfo     { get; set; }
         public nint HwndListView     { get; set; }
         public nint HwndProgress     { get; set; }
-        public nint HwndLabelCompare { get; set; }
         public nint HwndEditCompare  { get; set; }
         public nint HwndLabelMatch   { get; set; }
         public nint HwndBtnCopySel   { get; set; }
@@ -342,7 +340,8 @@ public static class PropertySheetPage
                 (nint)(Win32.LVS_EX_FULLROWSELECT | Win32.LVS_EX_DOUBLEBUFFER));
             ThemeHelper.ApplyTheme(state.HwndListView);
 
-            AddColumn(state.HwndListView, COL_ALGO, "Algorithm", 80);
+            // Initial column widths - will be auto-resized in LayoutControls
+            AddColumn(state.HwndListView, COL_ALGO, "Algorithm", 92);
             AddColumn(state.HwndListView, COL_HASH, "Hash Value", 300);
 
             for (int i = 0; i < state.Summary.Hashes.Count; i++)
@@ -358,43 +357,45 @@ public static class PropertySheetPage
         if (state.HwndProgress != 0)
         {
             ThemeHelper.ApplyTheme(state.HwndProgress);
-            Win32.SendMessageW(state.HwndProgress, Win32.PBM_SETMARQUEE, 1, 40); // start, 40ms interval
+            Win32.SendMessageW(state.HwndProgress, Win32.PBM_SETMARQUEE, 1, 40);
         }
 
-        // ── Compare row ───────────────────────────────────────────────────────
-        state.HwndLabelCompare = Win32.CreateWindowExW(
-            0, "STATIC", "Compare:",
-            Win32.WS_CHILD | Win32.WS_VISIBLE,
-            0, 0, 56, 20, hwnd, (nint)IDC_LABEL_COMPARE, 0, null);
-
+        // ── Compare edit box (full width, with placeholder text) ──────────────
         state.HwndEditCompare = Win32.CreateWindowExW(
             0, "EDIT", "",
             Win32.WS_CHILD | Win32.WS_VISIBLE | Win32.WS_BORDER
             | Win32.ES_AUTOHSCROLL | Win32.WS_TABSTOP,
-            0, 0, 200, 22, hwnd, (nint)IDC_EDIT_COMPARE, 0, null);
+            0, 0, 300, 23, hwnd, (nint)IDC_EDIT_COMPARE, 0, null);
 
-        // ── Match label ───────────────────────────────────────────────────────
+        if (state.HwndEditCompare != 0)
+        {
+            // Set placeholder/cue text shown when edit is empty
+            fixed (char* pCue = "Paste hash here to compare…")
+                Win32.SendMessageW(state.HwndEditCompare, Win32.EM_SETCUEBANNER, 1, (nint)pCue);
+        }
+
+        // ── Match result label (left-aligned) ─────────────────────────────────
         state.HwndLabelMatch = Win32.CreateWindowExW(
             0, "STATIC", "",
-            Win32.WS_CHILD | Win32.WS_VISIBLE,
+            Win32.WS_CHILD | Win32.WS_VISIBLE | Win32.SS_ENDELLIPSIS,
             0, 0, 150, 22, hwnd, (nint)IDC_LABEL_MATCH, 0, null);
 
-        // ── Buttons ───────────────────────────────────────────────────────────
+        // ── Copy buttons ──────────────────────────────────────────────────────
         state.HwndBtnCopySel = Win32.CreateWindowExW(
-            0, "BUTTON", "Copy Selected",
+            0, "BUTTON", "Copy",
             Win32.WS_CHILD | Win32.WS_VISIBLE | Win32.WS_TABSTOP | Win32.BS_PUSHBUTTON,
-            0, 0, 95, 24, hwnd, (nint)IDC_BTN_COPY_SEL, 0, null);
+            0, 0, 60, 23, hwnd, (nint)IDC_BTN_COPY_SEL, 0, null);
 
         state.HwndBtnCopyAll = Win32.CreateWindowExW(
             0, "BUTTON", "Copy All",
             Win32.WS_CHILD | Win32.WS_VISIBLE | Win32.WS_TABSTOP | Win32.BS_PUSHBUTTON,
-            0, 0, 75, 24, hwnd, (nint)IDC_BTN_COPY_ALL, 0, null);
+            0, 0, 76, 23, hwnd, (nint)IDC_BTN_COPY_ALL, 0, null);
 
         // ── Apply font to all controls ────────────────────────────────────────
         nint[] controls =
         [
-            state.HwndFileInfo, state.HwndListView, state.HwndProgress,
-            state.HwndLabelCompare, state.HwndEditCompare, state.HwndLabelMatch,
+            state.HwndFileInfo, state.HwndListView,
+            state.HwndEditCompare, state.HwndLabelMatch,
             state.HwndBtnCopySel, state.HwndBtnCopyAll
         ];
         foreach (var c in controls)
@@ -411,75 +412,83 @@ public static class PropertySheetPage
         int h = rc.Height;
         if (w < 10 || h < 10) return;
 
-        const int pad    = 8;
-        const int btnH   = 24;
-        const int rowH   = 22;
-        const int progH  = 6;
-        const int infoH  = 18;
-        const int gap    = 6;
+        const int pad   = 8;
+        const int gap   = 5;
+        const int editH = 23;
+        const int btnH  = 23;
+        const int progH = 5;
+        const int infoH = 18;
+
+        // Button widths — fixed, independent of dialog width
+        const int btnCopyW    = 60;   // "Copy"
+        const int btnCopyAllW = 76;   // "Copy All"
 
         int contentW = w - pad * 2;
 
-        // File info
+        // ── Row positions from bottom ──────────────────────────────────────────
+        // [pad] [btnRow] [gap] [editRow] [gap] [progress] [gap] [listview] [gap] [fileInfo] [pad]
+
+        int btnRowBottom  = h - pad;
+        int btnRowTop     = btnRowBottom - btnH;
+        int editRowBottom = btnRowTop - gap;
+        int editRowTop    = editRowBottom - editH;
+        int progressBottom = editRowTop - gap;
+        int progressTop    = progressBottom - progH;
+        int listBottom     = progressTop - gap;
+        int listTop        = pad + infoH + gap;
+        int listH          = Math.Max(30, listBottom - listTop);
+
+        // ── File info label ───────────────────────────────────────────────────
         if (state.HwndFileInfo != 0)
             Win32.SetWindowPos(state.HwndFileInfo, 0,
                 pad, pad, contentW, infoH,
                 Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
 
-        // Bottom area: compare row + match label/buttons
-        int bottomH = gap + rowH + gap + btnH + pad;
-
-        // Progress bar (sits just above bottom area)
-        int progY  = h - bottomH - progH - gap;
-        if (state.HwndProgress != 0)
-            Win32.SetWindowPos(state.HwndProgress, 0,
-                pad, progY, contentW, progH,
-                Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
-
-        // List view fills space between info label and progress bar
-        int listY = pad + infoH + gap;
-        int listH = Math.Max(40, progY - listY - gap);
+        // ── List View ────────────────────────────────────────────────────────
         if (state.HwndListView != 0)
         {
             Win32.SetWindowPos(state.HwndListView, 0,
-                pad, listY, contentW, listH,
+                pad, listTop, contentW, listH,
                 Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
 
-            // Resize Hash Value column to fill remaining ListView width
-            const int algoColW = 80;
-            int hashColW = Math.Max(60, contentW - algoColW - 4); // 4 = scroll bar allowance
+            // Auto-size Algorithm column, give the rest to Hash Value
+            const int algoColW = 92;
+            int hashColW = Math.Max(60, contentW - algoColW - 22); // 22 = scrollbar allowance
             Win32.SendMessageW(state.HwndListView, Win32.LVM_SETCOLUMNWIDTH, COL_ALGO, algoColW);
             Win32.SendMessageW(state.HwndListView, Win32.LVM_SETCOLUMNWIDTH, COL_HASH, hashColW);
         }
 
-        // Compare row
-        int compareY = progY + progH + gap;
-        const int lblW = 58;
-        if (state.HwndLabelCompare != 0)
-            Win32.SetWindowPos(state.HwndLabelCompare, 0,
-                pad, compareY + 2, lblW, rowH,
-                Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
-        if (state.HwndEditCompare != 0)
-            Win32.SetWindowPos(state.HwndEditCompare, 0,
-                pad + lblW + 4, compareY, contentW - lblW - 4, rowH,
+        // ── Progress bar ─────────────────────────────────────────────────────
+        if (state.HwndProgress != 0)
+            Win32.SetWindowPos(state.HwndProgress, 0,
+                pad, progressTop, contentW, progH,
                 Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
 
-        // Buttons + match label
-        const int btnW1 = 102;
-        const int btnW2 = 80;
-        int actionsY = compareY + rowH + gap;
-        int matchW   = Math.Max(40, contentW - btnW1 - btnW2 - gap * 2);
+        // ── Compare edit box (full width) ─────────────────────────────────────
+        if (state.HwndEditCompare != 0)
+            Win32.SetWindowPos(state.HwndEditCompare, 0,
+                pad, editRowTop, contentW, editH,
+                Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
+
+        // ── Button row: [match label ...........] [Copy] [gap] [Copy All] ─────
+        int rightEdge = pad + contentW;
+        int copyAllX  = rightEdge - btnCopyAllW;
+        int copySelX  = copyAllX - gap - btnCopyW;
+        int matchLabelW = Math.Max(10, copySelX - pad - gap);
+
         if (state.HwndLabelMatch != 0)
             Win32.SetWindowPos(state.HwndLabelMatch, 0,
-                pad, actionsY + 2, matchW, btnH,
+                pad, btnRowTop + 2, matchLabelW, btnH,
                 Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
+
         if (state.HwndBtnCopySel != 0)
             Win32.SetWindowPos(state.HwndBtnCopySel, 0,
-                pad + matchW + gap, actionsY, btnW1, btnH,
+                copySelX, btnRowTop, btnCopyW, btnH,
                 Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
+
         if (state.HwndBtnCopyAll != 0)
             Win32.SetWindowPos(state.HwndBtnCopyAll, 0,
-                pad + matchW + gap + btnW1 + gap, actionsY, btnW2, btnH,
+                copyAllX, btnRowTop, btnCopyAllW, btnH,
                 Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
     }
 
