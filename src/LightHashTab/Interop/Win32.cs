@@ -14,6 +14,12 @@ public static unsafe class Win32
     public const uint WS_BORDER = 0x00800000;
     public const uint DS_CONTROL = 0x00000400;
 
+    // Static control styles
+    public const uint SS_ENDELLIPSIS = 0x00004000;
+
+    // GetWindowLongPtr / SetWindowLongPtr indices
+    public const int GWL_STYLE = -16;
+
     // Window Messages
     public const uint WM_NULL = 0x0000;
     public const uint WM_CREATE = 0x0001;
@@ -113,7 +119,9 @@ public static unsafe class Win32
     public const uint PBM_SETRANGE32 = WM_USER + 6;
     public const uint PBM_SETPOS = WM_USER + 2;
     public const uint PBM_SETSTATE = WM_USER + 16;
+    public const uint PBM_SETMARQUEE = WM_USER + 10;
     public const uint PBS_SMOOTH = 0x01;
+    public const uint PBS_MARQUEE = 0x08;
 
     // Common Controls
     public const uint ICC_LISTVIEW_CLASSES = 0x00000001;
@@ -245,6 +253,19 @@ public static unsafe class Win32
     public const int DEFAULT_GUI_FONT = 17;
 
     [DllImport("gdi32.dll", ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool DeleteObject(nint hObject);
+
+    [DllImport("gdi32.dll", ExactSpelling = true)]
+    public static extern nint CreateFontIndirectW(LOGFONTW* lplf);
+
+    public const uint SPI_GETNONCLIENTMETRICS = 0x0029;
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SystemParametersInfoW(uint uiAction, uint uiParam, void* pvParam, uint fWinIni);
+
+    [DllImport("gdi32.dll", ExactSpelling = true)]
     public static extern uint SetTextColor(nint hdc, uint color);
 
     [DllImport("gdi32.dll", ExactSpelling = true)]
@@ -367,4 +388,44 @@ public struct NMLISTVIEW
     public uint uChanged;
     public POINT ptAction;
     public nint lParam;
+}
+
+[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+public unsafe struct LOGFONTW
+{
+    public int lfHeight;
+    public int lfWidth;
+    public int lfEscapement;
+    public int lfOrientation;
+    public int lfWeight;
+    public byte lfItalic;
+    public byte lfUnderline;
+    public byte lfStrikeOut;
+    public byte lfCharSet;
+    public byte lfOutPrecision;
+    public byte lfClipPrecision;
+    public byte lfQuality;
+    public byte lfPitchAndFamily;
+    public fixed char lfFaceName[32];
+}
+
+[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+public unsafe struct NONCLIENTMETRICSW
+{
+    public uint cbSize;
+    public int iBorderWidth;
+    public int iScrollWidth;
+    public int iScrollHeight;
+    public int iCaptionWidth;
+    public int iCaptionHeight;
+    public LOGFONTW lfCaptionFont;
+    public int iSmCaptionWidth;
+    public int iSmCaptionHeight;
+    public LOGFONTW lfSmCaptionFont;
+    public int iMenuWidth;
+    public int iMenuHeight;
+    public LOGFONTW lfMenuFont;
+    public LOGFONTW lfStatusFont;
+    public LOGFONTW lfMessageFont;
+    public int iPaddedBorderWidth;
 }
