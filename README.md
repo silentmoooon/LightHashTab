@@ -1,4 +1,4 @@
-# lightHashTab
+# LightHashTab
 
 A lightweight, high-performance, modern Windows Explorer Property Sheet Shell Extension built in **C# (.NET NativeAOT)**, inspired by [OpenHashTab](https://github.com/namazso/OpenHashTab).
 
