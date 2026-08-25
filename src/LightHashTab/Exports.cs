@@ -75,69 +75,31 @@ public static unsafe class Exports
 
             string clsidStr = Com.CLSID_LightHashTab_String;
 
-            // Attempt machine-wide registration first (HKCR), fallback to user-scoped (HKCU)
-            bool machineSuccess = false;
-            try
+            // Always register to HKCU (per-user) only.
+            // Writing to HKCR causes Explorer to pre-load our DLL at startup
+            // (system-wide shell extension scan), producing a visible startup delay.
+            // HKCU registration is equally functional and is loaded on-demand only
+            // when the Properties dialog is opened.
+
+            // 1. HKCU\Software\Classes\CLSID\{CLSID}
+            using (var clsidKey = Registry.CurrentUser.CreateSubKey($@"Software\Classes\CLSID\{clsidStr}"))
             {
-                // 1. HKCR\CLSID\{CLSID}
-                using (var clsidKey = Registry.ClassesRoot.CreateSubKey($@"CLSID\{clsidStr}"))
-                {
-                    clsidKey.SetValue(string.Empty, Com.ExtensionDisplayName);
-                    using var inprocKey = clsidKey.CreateSubKey("InprocServer32");
-                    inprocKey.SetValue(string.Empty, dllPath);
-                    inprocKey.SetValue("ThreadingModel", "Apartment");
-                }
-
-                // 2. HKCR\*\shellex\PropertySheetHandlers\LightHashTab
-                using (var pshKey = Registry.ClassesRoot.CreateSubKey(@"*\shellex\PropertySheetHandlers\LightHashTab"))
-                {
-                    pshKey.SetValue(string.Empty, clsidStr);
-                }
-
-                // 3. HKCR\Directory\shellex\PropertySheetHandlers\LightHashTab
-                using (var dirKey = Registry.ClassesRoot.CreateSubKey(@"Directory\shellex\PropertySheetHandlers\LightHashTab"))
-                {
-                    dirKey.SetValue(string.Empty, clsidStr);
-                }
-
-                // 4. Approved list
-                try
-                {
-                    using var approvedKey = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Shell Extensions\Approved");
-                    approvedKey?.SetValue(clsidStr, Com.ExtensionDisplayName);
-                }
-                catch { }
-
-                machineSuccess = true;
-            }
-            catch (UnauthorizedAccessException)
-            {
-                machineSuccess = false;
+                clsidKey.SetValue(string.Empty, Com.ExtensionDisplayName);
+                using var inprocKey = clsidKey.CreateSubKey("InprocServer32");
+                inprocKey.SetValue(string.Empty, dllPath);
+                inprocKey.SetValue("ThreadingModel", "Apartment");
             }
 
-            if (!machineSuccess)
+            // 2. HKCU\Software\Classes\*\shellex\PropertySheetHandlers\LightHashTab
+            using (var pshKey = Registry.CurrentUser.CreateSubKey(@"Software\Classes\*\shellex\PropertySheetHandlers\LightHashTab"))
             {
-                // Fallback to per-user registration (HKCU\Software\Classes)
-                // 1. HKCU\Software\Classes\CLSID\{CLSID}
-                using (var clsidKey = Registry.CurrentUser.CreateSubKey($@"Software\Classes\CLSID\{clsidStr}"))
-                {
-                    clsidKey.SetValue(string.Empty, Com.ExtensionDisplayName);
-                    using var inprocKey = clsidKey.CreateSubKey("InprocServer32");
-                    inprocKey.SetValue(string.Empty, dllPath);
-                    inprocKey.SetValue("ThreadingModel", "Apartment");
-                }
+                pshKey.SetValue(string.Empty, clsidStr);
+            }
 
-                // 2. HKCU\Software\Classes\*\shellex\PropertySheetHandlers\LightHashTab
-                using (var pshKey = Registry.CurrentUser.CreateSubKey(@"Software\Classes\*\shellex\PropertySheetHandlers\LightHashTab"))
-                {
-                    pshKey.SetValue(string.Empty, clsidStr);
-                }
-
-                // 3. HKCU\Software\Classes\Directory\shellex\PropertySheetHandlers\LightHashTab
-                using (var dirKey = Registry.CurrentUser.CreateSubKey(@"Software\Classes\Directory\shellex\PropertySheetHandlers\LightHashTab"))
-                {
-                    dirKey.SetValue(string.Empty, clsidStr);
-                }
+            // 3. HKCU\Software\Classes\Directory\shellex\PropertySheetHandlers\LightHashTab
+            using (var dirKey = Registry.CurrentUser.CreateSubKey(@"Software\Classes\Directory\shellex\PropertySheetHandlers\LightHashTab"))
+            {
+                dirKey.SetValue(string.Empty, clsidStr);
             }
 
             // Notify Explorer
