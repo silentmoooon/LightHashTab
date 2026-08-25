@@ -232,9 +232,13 @@ public static unsafe class Win32
     [DllImport("user32.dll", ExactSpelling = true, SetLastError = true)]
     public static extern nint GetWindowLongPtrW(nint hWnd, int nIndex);
 
-    public const int DWLP_USER = 8;
-    public const int GWLP_USERDATA = -21;
+    // x64: DWLP_MSGRESULT=0, DWLP_DLGPROC=sizeof(LRESULT)=8, DWLP_USER=sizeof(LRESULT)+sizeof(DLGPROC)=16
+    // x86: DWLP_MSGRESULT=0, DWLP_DLGPROC=4,                DWLP_USER=8
+    // We target win-x64 only, so DWLP_USER = 16.
     public const int DWLP_MSGRESULT = 0;
+    public const int DWLP_DLGPROC   = 8;
+    public const int DWLP_USER      = 16;
+    public const int GWLP_USERDATA  = -21;
 
     [DllImport("gdi32.dll", ExactSpelling = true)]
     public static extern nint GetStockObject(int i);
