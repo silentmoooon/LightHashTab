@@ -1,0 +1,13 @@
+## .NET Ignore
+[Bb]in/
+[Oo]bj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+.vscode/
+
+## Trellis runtime / developer
+.trellis/.runtime/
+.trellis/.developer

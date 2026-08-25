@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/LightHashTab/LightHashTab.csproj" />
+  </Folder>
+  <Folder Name="/test/">
+    <Project Path="test/LightHashTab.Tests/LightHashTab.Tests.csproj" />
+  </Folder>
+</Solution>
