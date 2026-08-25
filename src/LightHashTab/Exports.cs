@@ -12,6 +12,9 @@ public static unsafe class Exports
 {
     public static int ServerLockCount = 0;
 
+    [DllImport("kernel32.dll", ExactSpelling = true, CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern nint GetModuleHandleW([MarshalAs(UnmanagedType.LPWStr)] string? lpModuleName);
+
     [DllImport("kernel32.dll", ExactSpelling = true, SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetModuleHandleExW(uint dwFlags, void* lpModuleName, out nint phModule);
@@ -57,6 +60,11 @@ public static unsafe class Exports
     [UnmanagedCallersOnly(EntryPoint = "DllRegisterServer", CallConvs = [typeof(CallConvStdcall)])]
     public static int DllRegisterServer()
     {
+        return DllRegisterServer_Core();
+    }
+
+    public static int DllRegisterServer_Core()
+    {
         try
         {
             string dllPath = GetCurrentDllPath();
@@ -67,31 +75,69 @@ public static unsafe class Exports
 
             string clsidStr = Com.CLSID_LightHashTab_String;
 
-            // 1. Register CLSID: HKCR\CLSID\{CLSID}
-            using (var clsidKey = Registry.ClassesRoot.CreateSubKey($@"CLSID\{clsidStr}"))
+            // Attempt machine-wide registration first (HKCR), fallback to user-scoped (HKCU)
+            bool machineSuccess = false;
+            try
             {
-                clsidKey.SetValue(string.Empty, Com.ExtensionDisplayName);
-                using var inprocKey = clsidKey.CreateSubKey("InprocServer32");
-                inprocKey.SetValue(string.Empty, dllPath);
-                inprocKey.SetValue("ThreadingModel", "Apartment");
+                // 1. HKCR\CLSID\{CLSID}
+                using (var clsidKey = Registry.ClassesRoot.CreateSubKey($@"CLSID\{clsidStr}"))
+                {
+                    clsidKey.SetValue(string.Empty, Com.ExtensionDisplayName);
+                    using var inprocKey = clsidKey.CreateSubKey("InprocServer32");
+                    inprocKey.SetValue(string.Empty, dllPath);
+                    inprocKey.SetValue("ThreadingModel", "Apartment");
+                }
+
+                // 2. HKCR\*\shellex\PropertySheetHandlers\LightHashTab
+                using (var pshKey = Registry.ClassesRoot.CreateSubKey(@"*\shellex\PropertySheetHandlers\LightHashTab"))
+                {
+                    pshKey.SetValue(string.Empty, clsidStr);
+                }
+
+                // 3. HKCR\Directory\shellex\PropertySheetHandlers\LightHashTab
+                using (var dirKey = Registry.ClassesRoot.CreateSubKey(@"Directory\shellex\PropertySheetHandlers\LightHashTab"))
+                {
+                    dirKey.SetValue(string.Empty, clsidStr);
+                }
+
+                // 4. Approved list
+                try
+                {
+                    using var approvedKey = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Shell Extensions\Approved");
+                    approvedKey?.SetValue(clsidStr, Com.ExtensionDisplayName);
+                }
+                catch { }
+
+                machineSuccess = true;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                machineSuccess = false;
             }
 
-            // 2. Register PropertySheet Handler for all files: HKCR\*\shellex\PropertySheetHandlers\LightHashTab
-            using (var pshKey = Registry.ClassesRoot.CreateSubKey(@"*\shellex\PropertySheetHandlers\LightHashTab"))
+            if (!machineSuccess)
             {
-                pshKey.SetValue(string.Empty, clsidStr);
-            }
+                // Fallback to per-user registration (HKCU\Software\Classes)
+                // 1. HKCU\Software\Classes\CLSID\{CLSID}
+                using (var clsidKey = Registry.CurrentUser.CreateSubKey($@"Software\Classes\CLSID\{clsidStr}"))
+                {
+                    clsidKey.SetValue(string.Empty, Com.ExtensionDisplayName);
+                    using var inprocKey = clsidKey.CreateSubKey("InprocServer32");
+                    inprocKey.SetValue(string.Empty, dllPath);
+                    inprocKey.SetValue("ThreadingModel", "Apartment");
+                }
 
-            // 3. Register PropertySheet Handler for directories: HKCR\Directory\shellex\PropertySheetHandlers\LightHashTab
-            using (var dirKey = Registry.ClassesRoot.CreateSubKey(@"Directory\shellex\PropertySheetHandlers\LightHashTab"))
-            {
-                dirKey.SetValue(string.Empty, clsidStr);
-            }
+                // 2. HKCU\Software\Classes\*\shellex\PropertySheetHandlers\LightHashTab
+                using (var pshKey = Registry.CurrentUser.CreateSubKey(@"Software\Classes\*\shellex\PropertySheetHandlers\LightHashTab"))
+                {
+                    pshKey.SetValue(string.Empty, clsidStr);
+                }
 
-            // 4. Register in Approved Shell Extensions list
-            using (var approvedKey = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Shell Extensions\Approved"))
-            {
-                approvedKey.SetValue(clsidStr, Com.ExtensionDisplayName);
+                // 3. HKCU\Software\Classes\Directory\shellex\PropertySheetHandlers\LightHashTab
+                using (var dirKey = Registry.CurrentUser.CreateSubKey(@"Software\Classes\Directory\shellex\PropertySheetHandlers\LightHashTab"))
+                {
+                    dirKey.SetValue(string.Empty, clsidStr);
+                }
             }
 
             // Notify Explorer
@@ -107,26 +153,30 @@ public static unsafe class Exports
     [UnmanagedCallersOnly(EntryPoint = "DllUnregisterServer", CallConvs = [typeof(CallConvStdcall)])]
     public static int DllUnregisterServer()
     {
+        return DllUnregisterServer_Core();
+    }
+
+    public static int DllUnregisterServer_Core()
+    {
         try
         {
             string clsidStr = Com.CLSID_LightHashTab_String;
 
-            // 1. Remove HKCR\*\shellex\PropertySheetHandlers\LightHashTab
+            // 1. Clean HKCR / HKLM
             try { Registry.ClassesRoot.DeleteSubKeyTree(@"*\shellex\PropertySheetHandlers\LightHashTab", false); } catch { }
-
-            // 2. Remove HKCR\Directory\shellex\PropertySheetHandlers\LightHashTab
             try { Registry.ClassesRoot.DeleteSubKeyTree(@"Directory\shellex\PropertySheetHandlers\LightHashTab", false); } catch { }
-
-            // 3. Remove HKCR\CLSID\{CLSID}
             try { Registry.ClassesRoot.DeleteSubKeyTree($@"CLSID\{clsidStr}", false); } catch { }
-
-            // 4. Remove from Approved list
             try
             {
                 using var approvedKey = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Shell Extensions\Approved", true);
                 approvedKey?.DeleteValue(clsidStr, false);
             }
             catch { }
+
+            // 2. Clean HKCU
+            try { Registry.CurrentUser.DeleteSubKeyTree(@"Software\Classes\*\shellex\PropertySheetHandlers\LightHashTab", false); } catch { }
+            try { Registry.CurrentUser.DeleteSubKeyTree(@"Software\Classes\Directory\shellex\PropertySheetHandlers\LightHashTab", false); } catch { }
+            try { Registry.CurrentUser.DeleteSubKeyTree($@"Software\Classes\CLSID\{clsidStr}", false); } catch { }
 
             // Notify Explorer
             SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, 0, 0);
@@ -138,18 +188,32 @@ public static unsafe class Exports
         }
     }
 
-    private static string GetCurrentDllPath()
+    public static string GetCurrentDllPath()
     {
-        delegate* unmanaged[Stdcall]<int> pFunc = &DllRegisterServer;
-        if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (void*)pFunc, out nint hModule))
+        // 1. Try GetModuleHandleW with known names
+        string[] candidateNames = ["LightHashTab.dll", "LightHashTab", "LightHashTab.Tests.dll"];
+        char* pBuf = stackalloc char[2048];
+
+        foreach (var name in candidateNames)
         {
-            char* pBuf = stackalloc char[2048];
-            uint len = GetModuleFileNameW(hModule, pBuf, 2048);
-            if (len > 0)
+            nint hMod = GetModuleHandleW(name);
+            if (hMod != 0)
             {
-                return new string(pBuf, 0, (int)len);
+                uint len = GetModuleFileNameW(hMod, pBuf, 2048);
+                if (len > 0)
+                {
+                    return new string(pBuf, 0, (int)len);
+                }
             }
         }
+
+        // 2. Try AppContext BaseDirectory fallback
+        string basePath = Path.Combine(AppContext.BaseDirectory, "LightHashTab.dll");
+        if (File.Exists(basePath))
+        {
+            return basePath;
+        }
+
         return string.Empty;
     }
 }
