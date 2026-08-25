@@ -4,6 +4,8 @@ A lightweight, high-performance, modern Windows Explorer Property Sheet Shell Ex
 
 It embeds a **"File Hashes"** tab directly into Windows Explorer's file Properties dialog, offering rapid multi-algorithm hash calculation (including **BLAKE3**), instant hash comparison, clipboard copying, and dark mode support with an ultra-low memory and disk footprint (~1.8 MB standalone unmanaged DLL).
 
+![LightHashTab Screenshot](assets/screenshot.png)
+
 ---
 
 ## ✨ Features
