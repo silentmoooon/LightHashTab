@@ -37,19 +37,20 @@ The compiled standalone DLL will be located at:
 
 ---
 
-## 📦 Installation / Registration
+## 📦 Installation
 
-Run Command Prompt or PowerShell as **Administrator**:
+LightHashTab is a fully standalone native DLL. It requires **no administrator privileges** and **no .NET runtime**.
 
-### Register
-```cmd
-regsvr32.exe "<path-to>\LightHashTab.dll"
-```
+1. Download the latest `LightHashTab-x.x.x-win-x64.zip` from the [Releases](https://github.com/silentmoooon/lightHashTab/releases) page.
+2. Extract the archive to any temporary folder.
+3. Double-click **`install.cmd`** to register the extension.
+   - *The script will automatically copy the DLL to your user directory (`%LOCALAPPDATA%\Programs\LightHashTab`) and register the COM object for the current user.*
 
-### Unregister
-```cmd
-regsvr32.exe /u "<path-to>\LightHashTab.dll"
-```
+You can now right-click any file in Windows Explorer, select **Properties**, and find the **File Hashes** tab!
+
+### Uninstallation
+
+To remove LightHashTab, double-click the **`uninstall.cmd`** script included in the release zip. This will cleanly unregister the extension and delete the DLL.
 
 ---
 
