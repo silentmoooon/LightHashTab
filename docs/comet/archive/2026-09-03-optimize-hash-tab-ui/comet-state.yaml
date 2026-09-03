@@ -1,0 +1,188 @@
+schema: comet.native.v4
+name: optimize-hash-tab-ui
+language: zh-CN
+phase: archive
+status: done
+state_version: 15
+brief: brief.md
+spec_changes:
+  - capability: ui
+    operation: create
+    source: specs/ui/spec.md
+workspace:
+  isolation: current
+  change_branch: main
+  target_branch: main
+  finish: null
+loop:
+  stage: done
+  goal_cycle: 1
+  iteration: 3
+  attempt: 1
+  retry_epoch: 0
+  failed_iteration_count: 0
+  no_progress_count: 0
+  execution_failure_count: 0
+  previous_unresolved_ids: []
+  next_action: null
+acceptance:
+  - id: A1
+    source: brief.md
+    text: "A1: 主属性页在高 DPI 缩放下控件与文字无截断。用户在任意 DPI 缩放比例（100%、125%、150%
+      等）下打开文件属性的“文件哈希”属性页时，表头“算法”、“哈希值”完整展示无省略号，算法名称完整显示，底部操作按钮（“设置”、“复制”、“复制全部\
+      ”、“粘贴/清除”）具有合适内外边距且文字完整显示。"
+    result: passed
+    reason:
+      text: 主属性页在高 DPI 缩放下所有控件与文字无截断，长文件名通过二分算法智能测量截断，确保文件大小与耗时始终完整可见。
+      truncated: false
+  - id: A2
+    source: brief.md
+    text: "A2: 算法与哈希列表展示支持完整自适应与等宽字体清晰显示。哈希值使用清晰易读的等宽字体呈现且字体高度随 DPI
+      协调缩放；当哈希值超出显示区域（如 SHA-512 128位）时允许横向滚动查看完整内容，且鼠标悬停在列表项上时弹出 Tooltip
+      显示完整哈希值。"
+    result: passed
+    reason:
+      text: 算法与哈希列表等宽字体随 DPI 缩放，长哈希列宽基于实际字体宽度测量自适应，支持横向滚动与悬浮气泡。
+      truncated: false
+  - id: A3
+    source: brief.md
+    text: "A3:
+      算法设置对话框具备正规标题栏、关闭按钮、两列排版且按钮无截断。用户点击“设置”按钮打开算法配置窗口时，弹出窗口位于父窗口中央，具有标准标题栏（“算\
+      法设置”）、系统边框与关闭按钮；算法复选框采用双列整洁对齐排版，底部 [全选] [默认] 与 [确定] [取消] 按钮文字完整、间距舒适。"
+    result: passed
+    reason:
+      text: 算法设置对话框标准模态化，双列整齐排版，四颗按钮间距充足无遮挡。
+      truncated: false
+  - id: A4
+    source: brief.md
+    text: "A4:
+      哈希比对与匹配状态具备清晰反馈与整行高亮。用户在比对框中输入或粘贴与某算法匹配的哈希字符串时，列表对应行以浅绿底色整行高亮显示，状态提示清晰显示“✔
+      匹配成功: <算法名>”；当输入 8 位以上不匹配内容时显示“✖ 未匹配”。"
+    result: passed
+    reason:
+      text: 哈希比对匹配时整行浅绿底色高亮，状态提示清晰，清空即时重置。
+      truncated: false
+  - id: A5
+    source: brief.md
+    text: "A5: 界面文案与提示信息规范中文呈现。属性页标题为“文件哈希”，比较提示为“比对:”，快捷操作菜单与状态反馈均为规范中文。"
+    result: passed
+    reason:
+      text: 界面文案与提示信息规范中文呈现，文件大小单位换算（B/KB/MB/GB）与极短耗时（< 1ms）准确显示。
+      truncated: false
+builder_handoff:
+  candidate_id: 975b14d3-e419-4ad6-9708-5a09ba0f2024
+  identity_provider: skill-coordinated
+  builder_execution_ref: skill-coordinated:builder:c682e7d1-8014-4ac2-a712-2109cc846f41
+  iteration: 3
+  summary:
+    text: 修复了文件大小单位计算错误（此前由于循环计数器偏移导致单位被错误提升一级如 KB 显示为 MB）、耗时在极短时间（<
+      1ms）与小文件时不显示的问题（完善为统一展示毫秒及 < 1毫秒），并通过 GDI
+      像素级精确测量实现了长文件名的自适应二分智能截断（保留扩展名），绝对保障文件大小与耗时信息 100% 完整可见。
+    truncated: false
+  addressed_acceptance_ids:
+    - A1
+    - A2
+    - A3
+    - A4
+    - A5
+  checks:
+    - name:
+        text: dotnet-test
+        truncated: false
+      result: passed
+      note:
+        text: 21 个单元测试全部通过（包含单位换算与速度耗时测试）
+        truncated: false
+    - name:
+        text: dotnet-publish-aot
+        truncated: false
+      result: passed
+      note:
+        text: NativeAOT 成功发布独立 DLL
+        truncated: false
+  checks_truncated: false
+  known_limits: []
+  known_limits_truncated: false
+  review:
+    status: passed
+    summary:
+      text: 迭代3复核通过：文件大小单位换算精准无误，耗时展示无遗漏，长文件名像素级二分截断优先保护大小与耗时元数据完整呈现，GDI 资源安全。
+      truncated: false
+    reviewer_execution_ref: e14a4b40-88dc-4f67-a94a-18fce05f95ae
+  submitted_at: 2026-09-03T03:34:48.959Z
+blockers: []
+verification:
+  candidate_id: 975b14d3-e419-4ad6-9708-5a09ba0f2024
+  identity_provider: skill-coordinated
+  verifier_execution_ref: skill-coordinated:verifier:eb7d26db-ace0-4be6-aaee-645ce522eeae
+  iteration: 3
+  attempt: 1
+  assurance: skill-coordinated
+  verdict: pass
+  checks: []
+  summary:
+    text: 全部 5 项验收指标（A1~A5）在迭代3中均已复核通过，文件大小单位换算、耗时显示及长文件名保护性截断全部完备落实。
+    truncated: false
+  risks: []
+  risks_truncated: false
+  completed_at: 2026-09-03T03:35:06.274Z
+history:
+  - goal_cycle: 1
+    iteration: 1
+    attempt: 1
+    outcome: pass
+    unresolved_ids: []
+    summary:
+      text: 全部 5 项验收指标（A1~A5）均已验证通过，UI 显示效果、高 DPI 适配与中文体验大幅提升。
+      truncated: false
+    completed_at: 2026-09-03T03:22:18.564Z
+  - goal_cycle: 1
+    iteration: 1
+    attempt: 1
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: 修复长哈希截断与算法设置对话框按钮重叠遮挡问题
+      truncated: false
+    completed_at: 2026-09-03T03:28:20.863Z
+  - goal_cycle: 1
+    iteration: 2
+    attempt: 1
+    outcome: pass
+    unresolved_ids: []
+    summary:
+      text: 全部 5 项验收指标（A1~A5）在迭代2中均已复核通过，长哈希截断和算法设置对话框按钮遮挡问题已彻底根治。
+      truncated: false
+    completed_at: 2026-09-03T03:30:45.428Z
+  - goal_cycle: 1
+    iteration: 2
+    attempt: 1
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: 修复文件大小单位计算错误、耗时显示逻辑以及长文件名智能截断
+      truncated: false
+    completed_at: 2026-09-03T03:31:21.679Z
+  - goal_cycle: 1
+    iteration: 3
+    attempt: 1
+    outcome: pass
+    unresolved_ids: []
+    summary:
+      text: 全部 5 项验收指标（A1~A5）在迭代3中均已复核通过，文件大小单位换算、耗时显示及长文件名保护性截断全部完备落实。
+      truncated: false
+    completed_at: 2026-09-03T03:35:06.274Z
+history_overflow:
+  dropped_entries: 0
+  first_dropped_at: null
+  last_dropped_at: null
+  outcome_counts:
+    pass: 0
+    fail: 0
+    blocked: 0
+    execution-error: 0
+    recovery: 0
+verification_result: pass
+verification_report: verification.md
+archived: true
+created_at: 2026-09-03T03:09:39.386Z

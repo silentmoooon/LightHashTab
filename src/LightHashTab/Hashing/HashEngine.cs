@@ -29,14 +29,37 @@ public static class HashEngine
         var fileInfo = new FileInfo(filePath);
         long totalBytes = fileInfo.Length;
 
-        // Initialize active hashers
-        using var blake3 = Blake3.Hasher.New();
-        using var sha256 = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        using var sha512 = IncrementalHash.CreateHash(HashAlgorithmName.SHA512);
-        using var sha1 = IncrementalHash.CreateHash(HashAlgorithmName.SHA1);
-        using var md5 = IncrementalHash.CreateHash(HashAlgorithmName.MD5);
-        var crc32 = new System.IO.Hashing.Crc32();
-        var xxh64 = new System.IO.Hashing.XxHash64();
+        // Determine which algorithms are requested
+        bool needBlake3 = false, needSha256 = false, needSha512 = false;
+        bool needSha384 = false, needSha1 = false, needMd5 = false;
+        bool needCrc32 = false, needXxh64 = false, needXxh128 = false;
+
+        foreach (var item in targetList)
+        {
+            switch (item.Type)
+            {
+                case HashAlgorithmType.Blake3: needBlake3 = true; break;
+                case HashAlgorithmType.Sha256: needSha256 = true; break;
+                case HashAlgorithmType.Sha512: needSha512 = true; break;
+                case HashAlgorithmType.Sha384: needSha384 = true; break;
+                case HashAlgorithmType.Sha1:   needSha1 = true; break;
+                case HashAlgorithmType.Md5:    needMd5 = true; break;
+                case HashAlgorithmType.Crc32:  needCrc32 = true; break;
+                case HashAlgorithmType.Xxh64:  needXxh64 = true; break;
+                case HashAlgorithmType.Xxh128: needXxh128 = true; break;
+            }
+        }
+
+        // Initialize only active hashers
+        using var blake3 = needBlake3 ? Blake3.Hasher.New() : null;
+        using var sha256 = needSha256 ? IncrementalHash.CreateHash(HashAlgorithmName.SHA256) : null;
+        using var sha512 = needSha512 ? IncrementalHash.CreateHash(HashAlgorithmName.SHA512) : null;
+        using var sha384 = needSha384 ? IncrementalHash.CreateHash(HashAlgorithmName.SHA384) : null;
+        using var sha1   = needSha1   ? IncrementalHash.CreateHash(HashAlgorithmName.SHA1) : null;
+        using var md5    = needMd5    ? IncrementalHash.CreateHash(HashAlgorithmName.MD5) : null;
+        var crc32        = needCrc32  ? new System.IO.Hashing.Crc32() : null;
+        var xxh64        = needXxh64  ? new System.IO.Hashing.XxHash64() : null;
+        var xxh128       = needXxh128 ? new System.IO.Hashing.XxHash128() : null;
 
         byte[] buffer = new byte[BufferSize];
         long bytesProcessed = 0;
@@ -62,14 +85,16 @@ public static class HashEngine
 
             ReadOnlySpan<byte> span = buffer.AsSpan(0, bytesRead);
 
-            // Feed chunk to all hashers in single pass
-            blake3.Update(span);
-            sha256.AppendData(span);
-            sha512.AppendData(span);
-            sha1.AppendData(span);
-            md5.AppendData(span);
-            crc32.Append(span);
-            xxh64.Append(span);
+            // Feed chunk to active hashers in single pass
+            blake3?.Update(span);
+            sha256?.AppendData(span);
+            sha512?.AppendData(span);
+            sha384?.AppendData(span);
+            sha1?.AppendData(span);
+            md5?.AppendData(span);
+            crc32?.Append(span);
+            xxh64?.Append(span);
+            xxh128?.Append(span);
 
             bytesProcessed += bytesRead;
 
@@ -84,23 +109,44 @@ public static class HashEngine
             }
         }
 
-        // Finalize all hashes
-        Span<byte> b3Hash = stackalloc byte[32];
-        blake3.Finalize(b3Hash);
-        string b3Str = Convert.ToHexStringLower(b3Hash);
+        // Finalize active hashes
+        string b3Str = string.Empty;
+        if (blake3 != null)
+        {
+            Span<byte> b3Hash = stackalloc byte[32];
+            blake3.Finalize(b3Hash);
+            b3Str = Convert.ToHexStringLower(b3Hash);
+        }
 
-        string sha256Str = Convert.ToHexStringLower(sha256.GetHashAndReset());
-        string sha512Str = Convert.ToHexStringLower(sha512.GetHashAndReset());
-        string sha1Str = Convert.ToHexStringLower(sha1.GetHashAndReset());
-        string md5Str = Convert.ToHexStringLower(md5.GetHashAndReset());
+        string sha256Str = sha256 != null ? Convert.ToHexStringLower(sha256.GetHashAndReset()) : string.Empty;
+        string sha512Str = sha512 != null ? Convert.ToHexStringLower(sha512.GetHashAndReset()) : string.Empty;
+        string sha384Str = sha384 != null ? Convert.ToHexStringLower(sha384.GetHashAndReset()) : string.Empty;
+        string sha1Str   = sha1 != null   ? Convert.ToHexStringLower(sha1.GetHashAndReset()) : string.Empty;
+        string md5Str    = md5 != null    ? Convert.ToHexStringLower(md5.GetHashAndReset()) : string.Empty;
 
-        Span<byte> crcBytes = stackalloc byte[4];
-        crc32.GetCurrentHash(crcBytes);
-        string crcStr = Convert.ToHexStringLower(crcBytes);
+        string crcStr = string.Empty;
+        if (crc32 != null)
+        {
+            Span<byte> crcBytes = stackalloc byte[4];
+            crc32.GetCurrentHash(crcBytes);
+            crcStr = Convert.ToHexStringLower(crcBytes);
+        }
 
-        Span<byte> xxhBytes = stackalloc byte[8];
-        xxh64.GetCurrentHash(xxhBytes);
-        string xxhStr = Convert.ToHexStringLower(xxhBytes);
+        string xxh64Str = string.Empty;
+        if (xxh64 != null)
+        {
+            Span<byte> xxhBytes = stackalloc byte[8];
+            xxh64.GetCurrentHash(xxhBytes);
+            xxh64Str = Convert.ToHexStringLower(xxhBytes);
+        }
+
+        string xxh128Str = string.Empty;
+        if (xxh128 != null)
+        {
+            Span<byte> xxh128Bytes = stackalloc byte[16];
+            xxh128.GetCurrentHash(xxh128Bytes);
+            xxh128Str = Convert.ToHexStringLower(xxh128Bytes);
+        }
 
         foreach (var item in targetList)
         {
@@ -109,10 +155,12 @@ public static class HashEngine
                 HashAlgorithmType.Blake3 => b3Str,
                 HashAlgorithmType.Sha256 => sha256Str,
                 HashAlgorithmType.Sha512 => sha512Str,
-                HashAlgorithmType.Sha1 => sha1Str,
-                HashAlgorithmType.Md5 => md5Str,
-                HashAlgorithmType.Crc32 => crcStr,
-                HashAlgorithmType.Xxh64 => xxhStr,
+                HashAlgorithmType.Sha384 => sha384Str,
+                HashAlgorithmType.Sha1   => sha1Str,
+                HashAlgorithmType.Md5    => md5Str,
+                HashAlgorithmType.Crc32  => crcStr,
+                HashAlgorithmType.Xxh64  => xxh64Str,
+                HashAlgorithmType.Xxh128 => xxh128Str,
                 _ => string.Empty
             };
             item.Status = "Completed";

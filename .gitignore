@@ -1,5 +1,6 @@
 ## .NET Ignore
 [Bb]in/
+dist/
 [Oo]bj/
 *.user
 *.suo
@@ -11,3 +12,8 @@
 ## Trellis runtime / developer
 .trellis/.runtime/
 .trellis/.developer
+# >>> Comet managed project state >>>
+!/.comet/
+/.comet/*
+!/.comet/config.yaml
+# <<< Comet managed project state <<<

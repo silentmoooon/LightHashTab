@@ -30,5 +30,7 @@ public sealed class FileHashSummary
     public required string FilePath { get; init; }
     public string FileName { get; init; } = string.Empty;
     public long FileSize { get; init; }
+    public double ElapsedMs { get; set; }
+    public bool IsUppercase { get; set; }
     public List<HashItem> Hashes { get; init; } = [];
 }

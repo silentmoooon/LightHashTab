@@ -28,6 +28,7 @@ public static unsafe class Win32
     public const uint WM_SETTEXT = 0x000C;
     public const uint WM_GETTEXT = 0x000D;
     public const uint WM_GETTEXTLENGTH = 0x000E;
+    public const uint WM_CLOSE = 0x0010;
     public const uint WM_SETFONT = 0x0030;
     public const uint WM_GETFONT = 0x0031;
     public const uint WM_NOTIFY = 0x004E;
@@ -91,7 +92,11 @@ public static unsafe class Win32
     public const uint LVM_SETITEMCOUNT = LVM_FIRST + 47;
     public const uint LVM_GETNEXTITEM = LVM_FIRST + 12;
     public const uint LVM_DELETEALLITEMS = LVM_FIRST + 9;
+    public const uint LVM_GETCOLUMNWIDTH = LVM_FIRST + 29;
     public const uint LVM_SETCOLUMNWIDTH = LVM_FIRST + 30;
+
+    public const uint LVN_FIRST = unchecked((uint)-100);
+    public const uint LVN_GETINFOTIPW = unchecked(LVN_FIRST - 57);
 
     public const uint LVS_EX_FULLROWSELECT = 0x00000020;
     public const uint LVS_EX_GRIDLINES = 0x00000001;
@@ -117,6 +122,20 @@ public static unsafe class Win32
 
     public const uint BS_PUSHBUTTON = 0x00000000;
     public const uint BS_DEFPUSHBUTTON = 0x00000001;
+    public const uint BS_AUTOCHECKBOX = 0x00000003;
+    public const uint BM_GETCHECK = 0x00F0;
+    public const uint BM_SETCHECK = 0x00F1;
+    public const int BST_UNCHECKED = 0;
+    public const int BST_CHECKED = 1;
+
+    public const uint WS_CAPTION = 0x00C00000;
+    public const uint WS_SYSMENU = 0x00080000;
+    public const uint WS_POPUP = 0x80000000;
+    public const uint WS_EX_DLGMODALFRAME = 0x00000001;
+
+    public const uint DS_SETFONT = 0x00000040;
+    public const uint DS_MODALFRAME = 0x00000080;
+    public const uint DS_CENTER = 0x00000800;
 
     // Progress Bar Messages
     public const uint PBM_SETRANGE32 = WM_USER + 6;
@@ -168,6 +187,7 @@ public static unsafe class Win32
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool SetWindowPos(nint hWnd, nint hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
 
+    public const uint SWP_NOMOVE = 0x0002;
     public const uint SWP_NOZORDER = 0x0004;
     public const uint SWP_NOACTIVATE = 0x0010;
 
@@ -203,6 +223,9 @@ public static unsafe class Win32
 
     [DllImport("user32.dll", ExactSpelling = true)]
     public static extern nint SetClipboardData(uint uFormat, nint hMem);
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    public static extern nint GetClipboardData(uint uFormat);
 
     [DllImport("kernel32.dll", ExactSpelling = true)]
     public static extern nint GlobalAlloc(uint uFlags, nuint dwBytes);
@@ -254,6 +277,13 @@ public static unsafe class Win32
     [DllImport("gdi32.dll", ExactSpelling = true)]
     public static extern nint GetStockObject(int i);
     public const int DEFAULT_GUI_FONT = 17;
+    public const int NULL_BRUSH = 5;
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool InvalidateRect(nint hWnd, RECT* lpRect, [MarshalAs(UnmanagedType.Bool)] bool bErase);
+
+    public static bool Invalidate(nint hWnd) => InvalidateRect(hWnd, null, true);
 
     [DllImport("gdi32.dll", ExactSpelling = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -277,6 +307,206 @@ public static unsafe class Win32
     [DllImport("gdi32.dll", ExactSpelling = true)]
     public static extern int SetBkMode(nint hdc, int mode);
     public const int TRANSPARENT = 1;
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool ShowWindow(nint hWnd, int nCmdShow);
+    public const int SW_HIDE = 0;
+    public const int SW_SHOW = 5;
+
+    [DllImport("gdi32.dll", ExactSpelling = true)]
+    public static extern nint SelectObject(nint hdc, nint hgdiobj);
+
+    [DllImport("gdi32.dll", ExactSpelling = true)]
+    public static extern nint CreateSolidBrush(uint color);
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    public static extern int FillRect(nint hDC, RECT* lprc, nint hbr);
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool GetCursorPos(POINT* lpPoint);
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool ScreenToClient(nint hWnd, POINT* lpPoint);
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    public static extern nint CreatePopupMenu();
+
+    [DllImport("user32.dll", ExactSpelling = true, CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool AppendMenuW(nint hMenu, uint uFlags, nuint uIDNewItem, [MarshalAs(UnmanagedType.LPWStr)] string? lpNewItem);
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    public static extern uint TrackPopupMenuEx(nint hmenu, uint fuFlags, int x, int y, nint hwnd, void* lptpm);
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool DestroyMenu(nint hMenu);
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool DestroyIcon(nint hIcon);
+
+    [DllImport("shell32.dll", ExactSpelling = true, CharSet = CharSet.Unicode)]
+    public static extern nuint SHGetFileInfoW(char* pszPath, uint dwFileAttributes, SHFILEINFOW* psfi, uint cbFileInfo, uint uFlags);
+
+    [DllImport("shell32.dll", ExactSpelling = true, CharSet = CharSet.Unicode)]
+    public static extern nint ShellExecuteW(nint hwnd, [MarshalAs(UnmanagedType.LPWStr)] string? lpOperation, [MarshalAs(UnmanagedType.LPWStr)] string lpFile, [MarshalAs(UnmanagedType.LPWStr)] string? lpParameters, [MarshalAs(UnmanagedType.LPWStr)] string? lpDirectory, int nShowCmd);
+
+    // Menu constants
+    public const uint MF_STRING = 0x0000;
+    public const uint MF_SEPARATOR = 0x0800;
+    public const uint MF_CHECKED = 0x0008;
+    public const uint MF_UNCHECKED = 0x0000;
+
+    public const uint TPM_LEFTALIGN = 0x0000;
+    public const uint TPM_TOPALIGN = 0x0000;
+    public const uint TPM_RETURNCMD = 0x0100;
+    public const uint TPM_RIGHTBUTTON = 0x0002;
+
+    // Shell file info constants
+    public const uint SHGFI_ICON = 0x000000100;
+    public const uint SHGFI_SMALLICON = 0x000000001;
+    public const uint SHGFI_USEFILEATTRIBUTES = 0x000000010;
+
+    public const uint SS_ICON = 0x00000003;
+    public const uint STM_SETICON = 0x0170;
+
+    public const uint WM_CONTEXTMENU = 0x007B;
+
+    public const uint NM_FIRST = 0U;
+    public const uint NM_DBLCLK = unchecked(NM_FIRST - 3);
+    public const uint NM_RCLICK = unchecked(NM_FIRST - 5);
+    public const uint NM_CUSTOMDRAW = unchecked(NM_FIRST - 12);
+
+    public const uint CDDS_PREPAINT = 0x00000001;
+    public const uint CDDS_POSTPAINT = 0x00000002;
+    public const uint CDDS_ITEM = 0x00010000;
+    public const uint CDDS_ITEMPREPAINT = CDDS_ITEM | CDDS_PREPAINT;
+    public const uint CDDS_SUBITEM = 0x00020000;
+
+    public const nint CDRF_DODEFAULT = 0x00000000;
+    public const nint CDRF_NEWFONT = 0x00000002;
+    public const nint CDRF_NOTIFYITEMDRAW = 0x00000020;
+    public const nint CDRF_NOTIFYSUBITEMDRAW = 0x00000020;
+
+    public const uint LVS_EX_INFOTIP = 0x00000400;
+    public const uint LVS_EX_LABELTIP = 0x00004000;
+    [DllImport("user32.dll", ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool GetWindowRect(nint hWnd, out RECT lpRect);
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    public static extern nint SetActiveWindow(nint hWnd);
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    public static extern int GetMessageW(MSG* lpMsg, nint hWnd, uint wMsgFilterMin, uint wMsgFilterMax);
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool TranslateMessage(MSG* lpMsg);
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    public static extern nint DispatchMessageW(MSG* lpMsg);
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool IsDialogMessageW(nint hDlg, MSG* lpMsg);
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    public static extern void PostQuitMessage(int nExitCode);
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    public static extern nint DefWindowProcW(nint hWnd, uint uMsg, nuint wParam, nint lParam);
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    public static extern nint DialogBoxIndirectParamW(
+        nint hInstance,
+        DLGTEMPLATE* hDialogTemplate,
+        nint hWndParent,
+        delegate* unmanaged[Stdcall]<nint, uint, nuint, nint, nint> lpDialogFunc,
+        nint dwInitParam);
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool EndDialog(nint hDlg, nint nResult);
+
+    [DllImport("user32.dll", ExactSpelling = true, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool AdjustWindowRectEx(RECT* lpRect, uint dwStyle, [MarshalAs(UnmanagedType.Bool)] bool bMenu, uint dwExStyle);
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    public static extern nint GetDesktopWindow();
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    public static extern uint GetDpiForWindow(nint hWnd);
+
+    public static uint GetWindowDpi(nint hWnd)
+    {
+        try
+        {
+            if (hWnd != 0)
+            {
+                uint dpi = GetDpiForWindow(hWnd);
+                if (dpi > 0) return dpi;
+            }
+        }
+        catch { }
+        return 96;
+    }
+
+    public static float GetDpiScale(nint hWnd)
+    {
+        return GetWindowDpi(hWnd) / 96.0f;
+    }
+
+    public static int Scale(int value, float scale) => (int)Math.Round(value * scale, MidpointRounding.AwayFromZero);
+
+    public static void CenterWindow(nint hWnd, nint hWndCenter)
+    {
+        if (hWnd == 0) return;
+        if (hWndCenter == 0) hWndCenter = GetDesktopWindow();
+
+        if (GetWindowRect(hWnd, out RECT rc) && GetWindowRect(hWndCenter, out RECT rcCenter))
+        {
+            int width = rc.Width;
+            int height = rc.Height;
+            int x = rcCenter.Left + (rcCenter.Width - width) / 2;
+            int y = rcCenter.Top + (rcCenter.Height - height) / 2;
+            SetWindowPos(hWnd, 0, x, y, width, height, SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+    }
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    public static extern nint GetDC(nint hWnd);
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    public static extern int ReleaseDC(nint hWnd, nint hDC);
+
+    [DllImport("gdi32.dll", ExactSpelling = true, CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool GetTextExtentPoint32W(nint hdc, char* lpString, int c, SIZE* lpSize);
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct SIZE
+{
+    public int cx;
+    public int cy;
+}
+
+[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+public unsafe struct NMLVGETINFOTIPW
+{
+    public NMHDR hdr;
+    public uint dwFlags;
+    public char* pszText;
+    public int cchTextMax;
+    public int iItem;
+    public int iSubItem;
+    public nint lParam;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -296,6 +526,17 @@ public struct POINT
 {
     public int X;
     public int Y;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct MSG
+{
+    public nint hwnd;
+    public uint message;
+    public nuint wParam;
+    public nint lParam;
+    public uint time;
+    public POINT pt;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -432,3 +673,43 @@ public unsafe struct NONCLIENTMETRICSW
     public LOGFONTW lfMessageFont;
     public int iPaddedBorderWidth;
 }
+
+[StructLayout(LayoutKind.Sequential)]
+public struct NMCUSTOMDRAW
+{
+    public NMHDR hdr;
+    public uint dwDrawStage;
+    public nint hdc;
+    public RECT rc;
+    public nuint dwItemSpec;
+    public uint uItemState;
+    public nint lItemlParam;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct NMLVCUSTOMDRAW
+{
+    public NMCUSTOMDRAW nmcd;
+    public uint clrText;
+    public uint clrTextBk;
+    public int iSubItem;
+    public uint dwItemType;
+    public uint clrFace;
+    public int iIconEffect;
+    public int iIconPhase;
+    public int iPartId;
+    public int iStateId;
+    public RECT rcText;
+    public uint uAlign;
+}
+
+[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+public unsafe struct SHFILEINFOW
+{
+    public nint hIcon;
+    public int iIcon;
+    public uint dwAttributes;
+    public fixed char szDisplayName[260];
+    public fixed char szTypeName[80];
+}
+

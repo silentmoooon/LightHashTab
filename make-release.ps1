@@ -49,12 +49,12 @@ LightHashTab $Version
 ====================
 A lightweight file hashing shell extension for Windows Explorer.
 
-Supported algorithms: BLAKE3, SHA-256, SHA-512, SHA-1, MD5, CRC32, XXH64
+Supported algorithms: BLAKE3, SHA-256, SHA-512, SHA-384, SHA-1, MD5, CRC32, XXH64, XXH128
 
 INSTALL
 -------
 1. Double-click install.cmd  (no admin required)
-2. Right-click any file > Properties > "File Hashes" tab
+2. Right-click any file > Properties > "文件哈希" tab
 
 REQUIREMENTS
 ------------
@@ -67,7 +67,7 @@ Double-click uninstall.cmd
 
 SOURCE
 ------
-https://github.com/your-username/lightHashTab
+https://github.com/silentmoooon/lightHashTab
 "@ | Set-Content "$packageDir\README.txt" -Encoding UTF8
 
 # 3. Zip
